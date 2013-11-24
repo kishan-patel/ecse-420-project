@@ -1,15 +1,19 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/time.h>
+#include <math.h>
 
 #define MIN(X,Y) ((X) < (Y) ? (X) : (Y))
+#define ERROR_TRESH 0.0001
 
 double **A;
+double **AOrig; 
 double **L;
 double **U;
 double **P;
 int N, B;
 int i, j, k, ii, maxRowIndex;
+struct timeval start, end;
 
 int getBlockSize(int N)
 {
@@ -21,36 +25,36 @@ int getBlockSize(int N)
 void initialize()
 {
   A = malloc(N * sizeof *A);   
+  AOrig = malloc(N * sizeof *AOrig);
   L = malloc(N * sizeof *L);
   U = malloc(N * sizeof *U);
-  P = malloc(N * sizeof *P);
 
   for(i=0; i<N; i++)
   {
     A[i] = malloc(N * sizeof *A[i]);
+    AOrig[i] = malloc(N * sizeof * AOrig[i]);
     L[i] = malloc(N * sizeof *L[i]);
     U[i] = malloc(N * sizeof *U[i]);
-    P[i] = malloc(N * sizeof *P[i]);
   }
 
   for(i=0; i<N; i++)
   {
     for(j=0; j<N; j++)
     {
-      A[i][j] = A[i][0] * j + 1;
-      U[i][j] = 0;//A[i][j];
+      A[i][j] = (i+1)*(j+1);
+      AOrig[i][j] = (i+1)*(j+1);
+      U[i][j] = 0;
 
       if(i==j)
       {
         L[i][j] = 1;
-        P[i][j] = 1;
+        A[i][j] *= 10;
+        AOrig[i][j] *= 10;
       }
       else
       { 
         L[i][j] = 0;
-        P[i][j] = 0;
       }
-
     }
   }
 }
@@ -67,6 +71,7 @@ void print(char name, double **matrix)
     
     printf("\n");
   }   
+  printf("\n");
 }
 
 int findMaxRowIndex(int k, int max)
@@ -93,6 +98,34 @@ int swapRows(double **matrix, int row1, int row2)
   matrix[row2] = tmp;
 }
 
+/*If partial pivoting is not used, there will be a lot
+of divisions by small numbers that occur. Thus, in the end,
+when we multiply L*U, if the value for each entry in the
+matrix is equal to it's corresponding entry in the A array
+withing a certain treshold, the factorization is considered
+to be successful*/
+int testPassed()
+{
+  double sum;
+
+  for(i=0; i<N; i++)
+  {
+    for(j=0; j<N; j++)
+    {
+      sum = 0;
+      for(k=0; k<N; k++)
+      {
+        sum += L[i][k]*U[k][j];
+      }
+      if(abs(AOrig[i][j] - sum) > ERROR_TRESH)
+      {
+        return 0;
+      }
+    }
+  }
+  return 1;
+}
+
 int main(int argc, char *argv[])
 {
   if(argc < 2)
@@ -101,40 +134,22 @@ int main(int argc, char *argv[])
     return 0;
   }
 
+  //Set the matrix and block sizes.
   N = atoi(argv[1]);
   B = getBlockSize(N);
+  
+  //Initialize A, L, U matrices
   initialize();
+  
+  //Output the A matrix
+  print('A', A);
 
-  printf("Array size = %d\n", N);
-  printf("Done initializing\n");
-  printf("Block size = %d\n", B);
+  //Make note of the start time
+  gettimeofday(&start, NULL);
 
-  A[0][0] = 2;
-  A[0][1] = 3;
-  A[0][2] = 0;
-  A[1][0] = -1;
-  A[1][1] = 2;
-  A[1][2] = -1;
-  A[2][0] = 3;
-  A[2][1] = 0;
-  A[2][2] = 3; 
-  for(i=0; i<3; i++){
-   for(j=0; j<3; j++){
-     U[i][j] = 0;//A[i][j];
-   }
-  }
-
-  printf("\n\n");
+  //Perform LU decomposition
   for(k=0; k<N; k++)
   {
-    maxRowIndex = findMaxRowIndex(k, A[k][k]); 
-    printf("K=%d\n",k);
-    /*if(maxRowIndex != k){
-      printf("Swapping rows: %d , %d\n", k, maxRowIndex);
-      swapRows(P, k, maxRowIndex);
-      swapRows(A, k, maxRowIndex);
-    }*/
-
     for(i=k; i<N; i++)
     {
       U[k][i] = A[k][i];
@@ -142,9 +157,6 @@ int main(int argc, char *argv[])
 
     for(i=k+1; i<N; i++)
     { 
-      if(k==0 && i==1){
-        printf("A[1][0]/A[0][0]=%f\n", A[i][k]/A[k][k]);
-      }
       L[i][k] = A[i][k]/A[k][k];
     }
 
@@ -156,10 +168,22 @@ int main(int argc, char *argv[])
       }
     }
 
-    print('A', A);
-    print('U', U);
-    print('L', L);
-    print('P', P);
-    printf("\n");
   }
+
+  //Make note of the end time
+  gettimeofday(&end, NULL);
+
+  //Check if LU decomposition is valid
+  if(testPassed() == 1){
+      printf("LU decomposition is valid\n\n");
+  }else{
+      printf("LU decomposition is not valid\n\n");
+  }
+
+  //Output the L and U matrices
+  print('L', L);
+  print('U', U);
+
+  //Output the time required to perform the decomposition
+  printf("Time of solve is: \n%lu us\n", (unsigned long)(end.tv_usec - start.tv_usec));
 }
