@@ -142,7 +142,7 @@ int main(int argc, char *argv[])
   initialize();
   
   //Output the A matrix
-  //print('A', A);
+  print('A', A);
 
   //Make note of the start time
   gettimeofday(&start, NULL);
@@ -174,15 +174,15 @@ int main(int argc, char *argv[])
   gettimeofday(&end, NULL);
 
   //Check if LU decomposition is valid
-  /*if(testPassed() == 1){
+  if(testPassed() == 1){
       printf("LU decomposition is valid\n\n");
   }else{
       printf("LU decomposition is not valid\n\n");
-  }*/
+  }
 
   //Output the L and U matrices
-  //print('L', L);
-  //print('U', U);
+  print('L', L);
+  print('U', U);
 
   //Output the time required to perform the decomposition
   unsigned int t = end.tv_usec - start.tv_usec;

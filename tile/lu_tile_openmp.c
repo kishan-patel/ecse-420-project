@@ -19,7 +19,7 @@ struct timeval start, end;
 int getBlockSize(int N)
 {
   //TODO - Write implemementation to determine block size.
-  B = 100000000;
+  B = 2;
   return B;  
 }
 
@@ -121,7 +121,7 @@ int testPassed()
       if(abs(AOrig[i][j] - sum) > ERROR_TRESH)
       {
         printf("Failing case:\n");
-        printf("A[%d][%d]=%0.3f\n",i,j,A[i][j]);
+        printf("A[%d][%d]=%0.3f\n",i,j,AOrig[i][j]);
         printf("sum=%0.3f\n",sum);
         return 0;
       }
@@ -146,7 +146,7 @@ int main(int argc, char *argv[])
   initialize();
   
   //Output the A matrix
-  //print('A', A);
+  print('A', A);
 
   printf("Timer started\n");
   //Make note of the start time
@@ -157,7 +157,10 @@ int main(int argc, char *argv[])
   {
     for(i=k; i<N; i++)
     {
-      U[k][i] = A[k][i];
+      if(i==k)
+        U[k][i] = AOrig[k][i];
+      else
+        U[k][i] = A[k][i];
     }
 
     for(i=k+1; i<N; i++)
@@ -165,18 +168,18 @@ int main(int argc, char *argv[])
       L[i][k] = A[i][k]/A[k][k];
     }
 
-    #pragma omp parallel for shared(A, U, L, k) private(j) schedule static
     for(i=k+1; i<N; i+=B)
     {
-      for(ii=i; ii<(ii+B, N); ii++)
-      {
-        #pragma omp parallel for shared(A, U, L, k, ii) private(j) schedule static
+      for(ii=i; ii<MIN(ii+B, N); ii++)
+      { 
+        printf("ii=%d,", ii);
         for(j=k+1; j<N; j++)
         {
           A[ii][j] = A[ii][j]-(L[ii][k]*U[k][j]);
         }
       }
     }
+    printf("\n");
   }
 
   //Make note of the end time
@@ -184,14 +187,14 @@ int main(int argc, char *argv[])
 
   //Check if LU decomposition is valid
   if(testPassed() == 1){
-      printf("LU decomposition is valid\n\n");
+    printf("LU decomposition is valid\n\n");
   }else{
-      printf("LU decomposition is not valid\n\n");
+    printf("LU decomposition is not valid\n\n");
   }
 
   //Output the L and U matrices
-  //print('L', L);
-  //print('U', U);
+  print('L', L);
+  print('U', U);
 
   //Output the time required to perform the decomposition
   unsigned int t = end.tv_usec - start.tv_usec;
