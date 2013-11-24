@@ -168,6 +168,9 @@ int main(int argc, char *argv[])
       }
     }
 
+    print('A', A);
+    print('L', L);
+    print('U', U);
   }
 
   //Make note of the end time
@@ -181,8 +184,8 @@ int main(int argc, char *argv[])
   }
 
   //Output the L and U matrices
-  print('L', L);
-  print('U', U);
+ // print('L', L);
+  //print('U', U);
 
   //Output the time required to perform the decomposition
   unsigned int t = end.tv_usec - start.tv_usec;
