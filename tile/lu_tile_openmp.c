@@ -2,9 +2,10 @@
 #include <stdlib.h>
 #include <sys/time.h>
 #include <math.h>
+#include <omp.h>
 
 #define MIN(X,Y) ((X) < (Y) ? (X) : (Y))
-#define ERROR_TRESH 0.0001
+#define ERROR_TRESH 0.01
 
 double **A;
 double **AOrig; 
@@ -18,7 +19,7 @@ struct timeval start, end;
 int getBlockSize(int N)
 {
   //TODO - Write implemementation to determine block size.
-  B = 64;
+  B = 100000000;
   return B;  
 }
 
@@ -119,6 +120,9 @@ int testPassed()
       }
       if(abs(AOrig[i][j] - sum) > ERROR_TRESH)
       {
+        printf("Failing case:\n");
+        printf("A[%d][%d]=%0.3f\n",i,j,A[i][j]);
+        printf("sum=%0.3f\n",sum);
         return 0;
       }
     }
@@ -142,8 +146,9 @@ int main(int argc, char *argv[])
   initialize();
   
   //Output the A matrix
-  print('A', A);
+  //print('A', A);
 
+  printf("Timer started\n");
   //Make note of the start time
   gettimeofday(&start, NULL);
 
@@ -160,14 +165,18 @@ int main(int argc, char *argv[])
       L[i][k] = A[i][k]/A[k][k];
     }
 
-    for(ii=k+1; ii<N; ii++)
+    #pragma omp parallel for shared(A, U, L, k) private(j) schedule static
+    for(i=k+1; i<N; i+=B)
     {
-      for(j=k+1; j<N; j++)
+      for(ii=i; ii<(ii+B, N); ii++)
       {
-        A[ii][j] = A[ii][j]-(L[ii][k]*U[k][j]);
+        #pragma omp parallel for shared(A, U, L, k, ii) private(j) schedule static
+        for(j=k+1; j<N; j++)
+        {
+          A[ii][j] = A[ii][j]-(L[ii][k]*U[k][j]);
+        }
       }
     }
-
   }
 
   //Make note of the end time
@@ -181,9 +190,17 @@ int main(int argc, char *argv[])
   }
 
   //Output the L and U matrices
-  print('L', L);
-  print('U', U);
+  //print('L', L);
+  //print('U', U);
 
   //Output the time required to perform the decomposition
-  printf("Time of solve is: \n%lu us\n", (unsigned long)(end.tv_usec - start.tv_usec));
+  unsigned int t = end.tv_usec - start.tv_usec;
+  double timeTaken = (double)t/1000000;
+  printf("Time of solve is: \n%0.3f s\n", timeTaken);  
+ 
+  //Free all the initalized arrays.
+  free(A);
+  free(AOrig);
+  free(L);
+  free(U);
 }
