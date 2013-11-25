@@ -141,15 +141,15 @@ int testPassed()
 
 int main(int argc, char *argv[])
 {
-  if(argc < 2)
+  if(argc < 3)
   {
-    printf("Usage: ./output_file matrix_size");
+    printf("Usage: ./output_file matrix_size block_size\n");
     return 0;
   }
 
   //Set the matrix and block sizes.
   N = atoi(argv[1]);
-  B = getBlockSize(N);
+  B = atoi(argv[2]);
   
   //Initialize A, L, U matrices
   initialize();
@@ -204,7 +204,7 @@ int main(int argc, char *argv[])
 
   //Output the time required to perform the decomposition
   unsigned long t = (end.tv_sec - start.tv_sec)*1000000 + (end.tv_usec - start.tv_usec);
-  printf("Time of solve is: \n%ld us\n", t);  
+  printf("Time of solve is: %ld us\n", t);  
  
   //Free all the initalized arrays.
   free(A);
