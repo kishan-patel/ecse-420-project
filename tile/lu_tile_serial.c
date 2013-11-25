@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <sys/time.h>
 #include <math.h>
+#include <omp.h>
 
 #define MIN(X,Y) ((X) < (Y) ? (X) : (Y))
 #define ERROR_TRESH 0.01
@@ -12,18 +13,20 @@ double **L;
 double **U;
 double **P;
 int N, B;
-int i, j, k, ii, maxRowIndex;
+int maxRowIndex;
 struct timeval start, end;
 
 int getBlockSize(int N)
 {
   //TODO - Write implemementation to determine block size.
-  B = 100000;
+  B = 2;
   return B;  
 }
 
 void initialize()
 {
+  int i, j, k, ii;
+
   A = malloc(N * sizeof *A);   
   AOrig = malloc(N * sizeof *AOrig);
   L = malloc(N * sizeof *L);
@@ -61,7 +64,11 @@ void initialize()
 
 void print(char name, double **matrix)
 {
+  int i, j, k, ii;
+
   printf("Matrix %c:\n", name);
+  double arrCopy [N][N];
+
   for(i=0; i<N; i++)
   {
     for(j=0; j<N; j++)
@@ -76,6 +83,7 @@ void print(char name, double **matrix)
 
 int findMaxRowIndex(int k, int max)
 {
+  int i, j, ii;
   int maxIndex = k;
   int maxSoFar = max;
 
@@ -106,6 +114,7 @@ withing a certain treshold, the factorization is considered
 to be successful*/
 int testPassed()
 {
+  int i,j,k,ii;
   double sum;
 
   for(i=0; i<N; i++)
@@ -119,6 +128,9 @@ int testPassed()
       }
       if(abs(AOrig[i][j] - sum) > ERROR_TRESH)
       {
+        printf("Failing case:\n");
+        printf("A[%d][%d]=%0.3f\n",i,j,AOrig[i][j]);
+        printf("sum=%0.3f\n",sum);
         return 0;
       }
     }
@@ -143,59 +155,63 @@ int main(int argc, char *argv[])
   
   //Output the A matrix
   //print('A', A);
-
+  printf("N=%d\n",N);
+  printf("Timer started\n");
   //Make note of the start time
-  gettimeofday(&start, NULL);
+  gettimeofday(&start, 0);
 
   //Perform LU decomposition
+  int i,j,k,ii;
+  int min;
+
   for(k=0; k<N; k++)
   {
     for(i=k; i<N; i++)
     {
-      U[k][i] = A[k][i];
+        U[k][i] = A[k][i];
     }
 
     for(i=k+1; i<N; i++)
     { 
       L[i][k] = A[i][k]/A[k][k];
     }
-
-    for(i=k+1; i<N; i+=B)
-    {
-      for(ii=i; ii<MIN(ii+B,N); ii++)
-      {
-        for(j=k+1; j<N; j++)
-        {
-          A[ii][j] = A[ii][j]-(L[ii][k]*U[k][j]);
+      for(i=k+1; i<N; i=i+B){
+        min = i+B < N ? i+B : N;
+        for(ii=i; ii<min; ii++)
+        { 
+          for(j=k+1; j<N; j++)
+          {
+            A[ii][j] = A[ii][j]-(L[ii][k]*U[k][j]);
+          }
+         /*printf("k=%d,i=%d\n", k,i);
+         print('A', A);
+         print('L', L);
+         print('U', U);*/ 
         }
       }
-   }
-
-    /*print('A', A);
-    print('L', L);
-    print('U', U);*/
   }
 
   //Make note of the end time
-  gettimeofday(&end, NULL);
+  //printf("Done decomposition\n");
+  gettimeofday(&end, 0);
 
   //Check if LU decomposition is valid
-  /*if(testPassed() == 1){
-      printf("LU decomposition is valid\n\n");
+  if(testPassed() == 1){
+    printf("LU decomposition is valid\n\n");
   }else{
-      printf("LU decomposition is not valid\n\n");
-  }*/
+    printf("LU decomposition is not valid\n\n");
+  }
 
   //Output the L and U matrices
-  //print('A', A);
+  //print('A', AOrig);
   //print('L', L);
   //print('U', U);
 
   //Output the time required to perform the decomposition
   unsigned long t = (end.tv_sec - start.tv_sec)*1000000 + (end.tv_usec - start.tv_usec);
-  printf("Time of solve is: \n%ld us\n", t);
-
-  //Free all the initialized arrays.
+  printf("Time of solve is: \n%ld us\n", t);  
+ 
+  //Free all the initalized arrays.
   free(A);
   free(AOrig);
   free(L);
