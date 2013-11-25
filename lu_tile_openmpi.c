@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <sys/time.h>
 #include <math.h>
-#include <omp.h>
+#include <mpi.h>
 
 #define MIN(X,Y) ((X) < (Y) ? (X) : (Y))
 #define ERROR_TRESH 0.01
@@ -158,25 +158,56 @@ int main(int argc, char *argv[])
   gettimeofday(&start, 0);
 
   //Perform LU decomposition
+  int mpi_rank, mpi_size;
+
+  // Initialize MPI after the timer has started.
+  // The threads split here after all and the initialization is
+  // part of the overhead.
+  MPI_Init(NULL, NULL);
+  MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &mpi_size);
+
+  //Perform LU decomposition
   int i,j,k,ii;
   int min;
 
+  // Map out which of the N jobs each processor will do:
+  int *jobs = malloc(N * (sizeof *jobs));
+
   for(k=0; k<N; k++)
   {
-    for(i=k; i<N; i++)
+    // Set which processor will run this particular job
+    // (splitting all entries of the matrix between all processors     )
+    // (we will get a list of processors per entry, ex 1, 2, 3, 1, 2, 3)
+    // (for 3 processors                                               )
+    jobs[k] = k % mpi_size;
+  }
+
+  for(k=0; k<N; k++)
+  {
+
+        for(i=k; i<N; i++)
+        {
+            U[k][i] = A[k][i];
+        }
+
+    // Only run this job if this processor is tasked with it:
+    if(jobs[k] == mpi_rank)
     {
-        U[k][i] = A[k][i];
+
+        for(i=k+1; i<N; i++)
+        { 
+          L[i][k] = A[i][k]/A[k][k];
+        }
     }
 
-    for(i=k+1; i<N; i++)
-    { 
-      L[i][k] = A[i][k]/A[k][k];
-    }
-    
-    #pragma omp parallel for private(ii, j, min)   
+    // Broadcast and recieve everyone's L matrix 
+    MPI_Bcast(&L[k][k], N-k, MPI_DOUBLE, jobs[k], MPI_COMM_WORLD); 
+ 
     for(i=k+1; i<N; i=i+B){
       min = (i + B) < N ? i + B : N; 
-      #pragma omp parallel for private (j) 
+
+   if(jobs[k] == mpi_rank){
       for(ii=i; ii< min; ii++)
       { 
         for(j=k+1; j<N; j++)
@@ -190,10 +221,13 @@ int main(int argc, char *argv[])
         //print('U', U);
       }
     }
+    }
   }
 
   //Make note of the end time
   //printf("Done decomposition\n");
+  MPI_Finalize();
+  free(jobs);
   gettimeofday(&end, 0);
 
   //Check if LU decomposition is valid. This is commented when trying to note 
