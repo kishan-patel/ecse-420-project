@@ -19,7 +19,7 @@ struct timeval start, end;
 int getBlockSize(int N)
 {
   //TODO - Write implemementation to determine block size.
-  B = 2;
+  B = 10000000;
   return B;  
 }
 
@@ -63,11 +63,13 @@ void initialize()
 void print(char name, double **matrix)
 {
   printf("Matrix %c:\n", name);
+  double arrCopy [N][N];
+
   for(i=0; i<N; i++)
   {
     for(j=0; j<N; j++)
     {
-      printf("%.3f ", matrix[i][j]);
+      printf("%.10f ", matrix[i][j]);
     }
     
     printf("\n");
@@ -146,11 +148,11 @@ int main(int argc, char *argv[])
   initialize();
   
   //Output the A matrix
-  print('A', A);
+  //print('A', A);
 
   printf("Timer started\n");
   //Make note of the start time
-  gettimeofday(&start, NULL);
+  gettimeofday(&start, 0);
 
   //Perform LU decomposition
   for(k=0; k<N; k++)
@@ -164,41 +166,42 @@ int main(int argc, char *argv[])
     { 
       L[i][k] = A[i][k]/A[k][k];
     }
-
-    for(i=k+1; i<N; i+=B)
-    {
-      for(ii=i; ii<MIN(ii+B, N); ii++)
-      { 
-        for(j=k+1; j<N; j++)
-        {
-          A[ii][j] = A[ii][j]-(L[ii][k]*U[k][j]);
+      #pragma omp parallel for private (i, ii, j) schedule(static)
+      for(i=k+1; i<N; i+=B){
+        for(ii=i; ii<MIN(ii+B,N); ii++)
+        { 
+          #pragma omp parallel for private(i, ii, j) schedule(static)
+          for(j=k+1; j<N; j++)
+          {
+            A[ii][j] = A[ii][j]-(L[ii][k]*U[k][j]);
+          }
+     /* printf("k=%d\n",k);
+      print('A', A); */
+      //print('L', L);
+      //print('U', U);
         }
       }
-      printf("k=%d\n",k);
-      print('A', A);
-      print('L', L);
-      print('U', U);
-    }
   }
 
   //Make note of the end time
-  gettimeofday(&end, NULL);
+  //printf("Done decomposition\n");
+  gettimeofday(&end, 0);
 
   //Check if LU decomposition is valid
-  if(testPassed() == 1){
+  /*if(testPassed() == 1){
     printf("LU decomposition is valid\n\n");
   }else{
     printf("LU decomposition is not valid\n\n");
-  }
+  }*/
 
   //Output the L and U matrices
+  //print('A', A);
   //print('L', L);
   //print('U', U);
 
   //Output the time required to perform the decomposition
-  unsigned int t = end.tv_usec - start.tv_usec;
-  double timeTaken = (double)t/1000000;
-  printf("Time of solve is: \n%0.3f s\n", timeTaken);  
+  unsigned long t = (end.tv_sec - start.tv_sec)*1000000 + (end.tv_usec - start.tv_usec);
+  printf("Time of solve is: \n%ld us\n", t);  
  
   //Free all the initalized arrays.
   free(A);
