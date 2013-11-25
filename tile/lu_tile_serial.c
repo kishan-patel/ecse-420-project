@@ -18,8 +18,9 @@ struct timeval start, end;
 
 int getBlockSize(int N)
 {
-  //TODO - Write implemementation to determine block size.
-  B = 2;
+  //TODO - Write implemementation to determine block size or make it a 
+  //parameter that is passed by the user.
+  B = 100;
   return B;  
 }
 
@@ -153,10 +154,6 @@ int main(int argc, char *argv[])
   //Initialize A, L, U matrices
   initialize();
   
-  //Output the A matrix
-  //print('A', A);
-  printf("N=%d\n",N);
-  printf("Timer started\n");
   //Make note of the start time
   gettimeofday(&start, 0);
 
@@ -175,37 +172,30 @@ int main(int argc, char *argv[])
     { 
       L[i][k] = A[i][k]/A[k][k];
     }
-      for(i=k+1; i<N; i=i+B){
-        min = i+B < N ? i+B : N;
-        for(ii=i; ii<min; ii++)
-        { 
-          for(j=k+1; j<N; j++)
-          {
-            A[ii][j] = A[ii][j]-(L[ii][k]*U[k][j]);
-          }
-         /*printf("k=%d,i=%d\n", k,i);
-         print('A', A);
-         print('L', L);
-         print('U', U);*/ 
+    
+    for(i=k+1; i<N; i=i+B){
+      min = (i + B) < N ? i + B : N; 
+      for(ii=i; ii< min; ii++)
+      { 
+        for(j=k+1; j<N; j++)
+        {
+          A[ii][j] = A[ii][j]-(L[ii][k]*U[k][j]);
         }
       }
+    }
   }
 
   //Make note of the end time
   //printf("Done decomposition\n");
   gettimeofday(&end, 0);
 
-  //Check if LU decomposition is valid
-  if(testPassed() == 1){
+  //Check if LU decomposition is valid. This is commented when trying to note 
+  //time it takes program to run as the testing seems to take really long.
+  /*if(testPassed() == 1){
     printf("LU decomposition is valid\n\n");
   }else{
     printf("LU decomposition is not valid\n\n");
-  }
-
-  //Output the L and U matrices
-  //print('A', AOrig);
-  //print('L', L);
-  //print('U', U);
+  }*/
 
   //Output the time required to perform the decomposition
   unsigned long t = (end.tv_sec - start.tv_sec)*1000000 + (end.tv_usec - start.tv_usec);
