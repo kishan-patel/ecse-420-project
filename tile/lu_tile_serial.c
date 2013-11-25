@@ -181,6 +181,11 @@ int main(int argc, char *argv[])
         {
           A[ii][j] = A[ii][j]-(L[ii][k]*U[k][j]);
         }
+        //printf("k=%d,i=%d",k,i);
+        //printf("Thread number=%d\n",omp_get_thread_num());
+        //print('A', A);
+        //print('L', L);
+        //print('U', U);
       }
     }
   }

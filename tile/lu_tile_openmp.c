@@ -13,18 +13,21 @@ double **L;
 double **U;
 double **P;
 int N, B;
-int i, j, k, ii, maxRowIndex;
+int maxRowIndex;
 struct timeval start, end;
 
 int getBlockSize(int N)
 {
-  //TODO - Write implemementation to determine block size.
-  B = 10000000;
+  //TODO - Write implemementation to determine block size or make it a 
+  //parameter that is passed by the user.
+  B = 100;
   return B;  
 }
 
 void initialize()
 {
+  int i, j, k, ii;
+
   A = malloc(N * sizeof *A);   
   AOrig = malloc(N * sizeof *AOrig);
   L = malloc(N * sizeof *L);
@@ -62,6 +65,8 @@ void initialize()
 
 void print(char name, double **matrix)
 {
+  int i, j, k, ii;
+
   printf("Matrix %c:\n", name);
   double arrCopy [N][N];
 
@@ -69,7 +74,7 @@ void print(char name, double **matrix)
   {
     for(j=0; j<N; j++)
     {
-      printf("%.10f ", matrix[i][j]);
+      printf("%.3f ", matrix[i][j]);
     }
     
     printf("\n");
@@ -79,6 +84,7 @@ void print(char name, double **matrix)
 
 int findMaxRowIndex(int k, int max)
 {
+  int i, j, ii;
   int maxIndex = k;
   int maxSoFar = max;
 
@@ -109,6 +115,7 @@ withing a certain treshold, the factorization is considered
 to be successful*/
 int testPassed()
 {
+  int i,j,k,ii;
   double sum;
 
   for(i=0; i<N; i++)
@@ -147,14 +154,13 @@ int main(int argc, char *argv[])
   //Initialize A, L, U matrices
   initialize();
   
-  //Output the A matrix
-  //print('A', A);
-
-  printf("Timer started\n");
   //Make note of the start time
   gettimeofday(&start, 0);
 
   //Perform LU decomposition
+  int i,j,k,ii;
+  int min;
+
   for(k=0; k<N; k++)
   {
     for(i=k; i<N; i++)
@@ -166,38 +172,37 @@ int main(int argc, char *argv[])
     { 
       L[i][k] = A[i][k]/A[k][k];
     }
-      #pragma omp parallel for private (i, ii, j) schedule(static)
-      for(i=k+1; i<N; i+=B){
-        for(ii=i; ii<MIN(ii+B,N); ii++)
-        { 
-          #pragma omp parallel for private(i, ii, j) schedule(static)
-          for(j=k+1; j<N; j++)
-          {
-            A[ii][j] = A[ii][j]-(L[ii][k]*U[k][j]);
-          }
-     /* printf("k=%d\n",k);
-      print('A', A); */
-      //print('L', L);
-      //print('U', U);
+    
+    #pragma omp parallel for private(ii, j, min)   
+    for(i=k+1; i<N; i=i+B){
+      min = (i + B) < N ? i + B : N; 
+      #pragma omp parallel for private (j) 
+      for(ii=i; ii< min; ii++)
+      { 
+        for(j=k+1; j<N; j++)
+        {
+          A[ii][j] = A[ii][j]-(L[ii][k]*U[k][j]);
         }
+        //printf("k=%d,i=%d",k,i);
+        //printf("Thread number=%d\n",omp_get_thread_num());
+        //print('A', A);
+        //print('L', L);
+        //print('U', U);
       }
+    }
   }
 
   //Make note of the end time
   //printf("Done decomposition\n");
   gettimeofday(&end, 0);
 
-  //Check if LU decomposition is valid
+  //Check if LU decomposition is valid. This is commented when trying to note 
+  //time it takes program to run as the testing seems to take really long.
   /*if(testPassed() == 1){
     printf("LU decomposition is valid\n\n");
   }else{
     printf("LU decomposition is not valid\n\n");
   }*/
-
-  //Output the L and U matrices
-  //print('A', A);
-  //print('L', L);
-  //print('U', U);
 
   //Output the time required to perform the decomposition
   unsigned long t = (end.tv_sec - start.tv_sec)*1000000 + (end.tv_usec - start.tv_usec);
