@@ -189,6 +189,26 @@ void algorithm()
         //print('U', U);
         	}
 
+		// Explanation of Broadcast:
+		// Here, we want to update all other processes with the values
+		// we just computed in the row that was assigned to us.
+		// The other processes have no idea of what these are unless
+		// we notify them, or broadcast, with the updated values.
+		// We then need to make sure we send or recv all rows from
+		// all processors before moving to the next pivot k.
+
+		// We use the address of the A[i] row to be:
+		// 1. sent if it was our job to update the row
+		// 2. recv if it wasn't
+		
+		// However, we are only interested in data boxed by the pivot
+		// Data from (i, k+1) to (N, N).
+		// This justifies the N-k-1 size.
+
+		// Because we designed row memory to be sequential, we send the
+		// address of the A matrix at the row we want to update,
+		// which is common in all processors, and send/recv just
+		// the right amount of data as our row counter, i, increases.
 		MPI_Bcast(&A[i][k+1], N-k-1, MPI_DOUBLE, i % mpi_size, MPI_COMM_WORLD);
     	}
 
