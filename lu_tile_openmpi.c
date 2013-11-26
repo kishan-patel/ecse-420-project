@@ -158,18 +158,6 @@ void algorithm()
   int i,j,k,ii;
   int min;
 
-  // Map out which of the N jobs each processor will do:
-  int *jobs = malloc(N * (sizeof *jobs));
-
-  for(k=0; k<N; k++)
-  {
-    // Set which processor will run this particular job
-    // (splitting all entries of the matrix between all processors     )
-    // (we will get a list of processors per entry, ex 1, 2, 3, 1, 2, 3)
-    // (for 3 processors                                               )
-    jobs[k] = k % mpi_size;
-  }
-
   // Getting all pivots that have entries below them (N - 1)
   for(k=0; k<N-1; k++)
   {
@@ -179,7 +167,7 @@ void algorithm()
 		// Update the entries below the pivot at A[k][k].
 		// This part can be done in parallel since
 		// we are only looking at one column at a time.
-		if(jobs[i] == mpi_rank)
+		if((i % mpi_size) == mpi_rank)
         	{ 
         		A[i][k] = A[i][k]/A[k][k];
         	}
@@ -197,7 +185,7 @@ void algorithm()
 	{
 		// Each column can be updated separately
 		// so this also plays nice with parallelization.
-   		if(jobs[i] == mpi_rank)
+   		if((i % mpi_size) == mpi_rank)
 		{
       			for(ii=k+1; ii<N; ii++)
       			{ 
@@ -218,11 +206,10 @@ void algorithm()
   //Make note of the end time
   //printf("Done decomposition\n");
   MPI_Finalize();
-  free(jobs);
 
   gettimeofday(&end, 0);
 
-  if(mpi_rank == jobs[N - 1])
+  if(mpi_rank == 0)
     return;
 
   else
