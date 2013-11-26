@@ -170,33 +170,38 @@ void algorithm()
     jobs[k] = k % mpi_size;
   }
 
+  // Getting all pivots that have entries below them (N - 1)
   for(k=0; k<N-1; k++)
   {
-	// Split these rows depending on the processor task list:
-	if(jobs[k] == mpi_rank)
+	// Here, we are acting on a single column (of index k)
+       	for(i=k+1; i<N; i++)
 	{
 		// Update the entries below the pivot at A[k][k].
-		// This part can be done in parallel.
-       		for(i=k+1; i<N; i++)
+		// This part can be done in parallel since
+		// we are only looking at one column at a time.
+		if(jobs[i] == mpi_rank)
         	{ 
         		A[i][k] = A[i][k]/A[k][k];
         	}
 	}
 
+	// Block execution here until all processes have finished
+	// dividing the column.
+	MPI_Barrier(MPI_COMM_WORLD); 
 
-	// Broadcast and recieve everyone's updated  matrix to recontruct
-	// our updated A matrix.
-	MPI_Bcast(&A[k][k], N-k, MPI_DOUBLE, jobs[k], MPI_COMM_WORLD); 
- 
+	// Once again, we look under our pivots.
+	// Now we want to multiply what's under the pivots
+	// by the top row, and subtract this from each column under
+	// the pivot
 	for(i=k+1; i<N; i++)
 	{
-
-		// If it's our processor's turn to compute this row:
-   		if(jobs[k] == mpi_rank)
+		// Each column can be updated separately
+		// so this also plays nice with parallelization.
+   		if(jobs[i] == mpi_rank)
 		{
       			for(ii=k+1; ii<N; ii++)
       			{ 
-        	  		A[i][ii] = A[i][ii]-(A[i][k]*A[k][ii]);
+        	  		A[ii][i] = A[ii][i]-(A[ii][k]*A[k][i]);
 			}
         //printf("k=%d,i=%d",k,i);
         //printf("Thread number=%d\n",omp_get_thread_num());
@@ -206,6 +211,8 @@ void algorithm()
         	}
     	}
 
+	// Block execution here until the sub matrix is updated.
+	MPI_Barrier(MPI_COMM_WORLD); 
   }
 
   //Make note of the end time
@@ -215,7 +222,7 @@ void algorithm()
 
   gettimeofday(&end, 0);
 
-  if(mpi_rank == 0)
+  if(mpi_rank == jobs[N - 1])
     return;
 
   else
