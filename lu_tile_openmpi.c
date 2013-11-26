@@ -214,7 +214,12 @@ void algorithm()
   free(jobs);
 
   gettimeofday(&end, 0);
-  return;
+
+  if(mpi_rank == 0)
+    return;
+
+  else
+    exit(0);
 }
 
 int main(int argc, char *argv[])
