@@ -139,21 +139,8 @@ int testPassed()
   return 1;
 }
 
-int main(int argc, char *argv[])
+void algorithm()
 {
-  if(argc < 3)
-  {
-    printf("Usage: ./output_file matrix_size block_size\n");
-    return 0;
-  }
-
-  //Set the matrix and block sizes.
-  N = atoi(argv[1]);
-  B = atoi(argv[2]);
-  
-  //Initialize A, L, U matrices
-  initialize();
-  
   //Make note of the start time
   gettimeofday(&start, 0);
 
@@ -183,52 +170,76 @@ int main(int argc, char *argv[])
     jobs[k] = k % mpi_size;
   }
 
-  for(k=0; k<N; k++)
+  for(k=0; k<N-1; k++)
   {
+	// Split these rows depending on the processor task list:
+	if(jobs[k] == mpi_rank)
+	{
+		// Update the entries below the pivot at A[k][k].
+		// This part can be done in parallel.
+       		for(i=k+1; i<N; i++)
+        	{ 
+        		A[i][k] = A[i][k]/A[k][k];
+        	}
+	}
 
-        for(i=k; i<N; i++)
-        {
-            U[k][i] = A[k][i];
-        }
 
-    // Only run this job if this processor is tasked with it:
-    if(jobs[k] == mpi_rank)
-    {
-
-        for(i=k+1; i<N; i++)
-        { 
-          L[i][k] = A[i][k]/A[k][k];
-        }
-    }
-
-    // Broadcast and recieve everyone's L matrix 
-    MPI_Bcast(&L[k][k], N-k, MPI_DOUBLE, jobs[k], MPI_COMM_WORLD); 
+	// Broadcast and recieve everyone's updated  matrix to recontruct
+	// our updated A matrix.
+	MPI_Bcast(&A[k][k], N-k, MPI_DOUBLE, jobs[k], MPI_COMM_WORLD); 
  
-    for(i=k+1; i<N; i=i+B){
-      min = (i + B) < N ? i + B : N; 
+	for(i=k+1; i<N; i++)
+	{
 
-   if(jobs[k] == mpi_rank){
-      for(ii=i; ii< min; ii++)
-      { 
-        for(j=k+1; j<N; j++)
-        {
-          A[ii][j] = A[ii][j]-(L[ii][k]*U[k][j]);
-        }
+		// If it's our processor's turn to compute this row:
+   		if(jobs[k] == mpi_rank)
+		{
+      			for(ii=k+1; ii<N; ii++)
+      			{ 
+        	  		A[i][ii] = A[i][ii]-(A[i][k]*A[k][ii]);
+			}
         //printf("k=%d,i=%d",k,i);
         //printf("Thread number=%d\n",omp_get_thread_num());
         //print('A', A);
         //print('L', L);
         //print('U', U);
-      }
-    }
-    }
+        	}
+    	}
+
   }
 
   //Make note of the end time
   //printf("Done decomposition\n");
   MPI_Finalize();
   free(jobs);
+
   gettimeofday(&end, 0);
+  return;
+}
+
+int main(int argc, char *argv[])
+{
+  if(argc < 3)
+  {
+    printf("Usage: ./output_file matrix_size block_size\n");
+    return 0;
+  }
+
+  //Set the matrix and block sizes.
+  N = atoi(argv[1]);
+  B = atoi(argv[2]);
+  
+  //Initialize A, L, U matrices
+  initialize();
+
+  // Run the LU algorithm
+  algorithm(); 
+ 
+  // Getting the L and U matricies back is done by simply analyzing the 
+  // computed A matrix. This is done outside the decomposition since
+  // it has nothing to do with the actual algorithm.
+  // TEST
+  print('A', A);
 
   //Check if LU decomposition is valid. This is commented when trying to note 
   //time it takes program to run as the testing seems to take really long.
