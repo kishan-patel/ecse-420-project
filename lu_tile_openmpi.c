@@ -165,17 +165,8 @@ void algorithm()
        	for(i=k+1; i<N; i++)
 	{
 		// Update the entries below the pivot at A[k][k].
-		// This part can be done in parallel since
-		// we are only looking at one column at a time.
-		if((i % mpi_size) == mpi_rank)
-        	{ 
-        		A[i][k] = A[i][k]/A[k][k];
-        	}
+        	A[i][k] = A[i][k]/A[k][k];
 	}
-
-	// Block execution here until all processes have finished
-	// dividing the column.
-	MPI_Barrier(MPI_COMM_WORLD); 
 
 	// Once again, we look under our pivots.
 	// Now we want to multiply what's under the pivots
@@ -183,13 +174,13 @@ void algorithm()
 	// the pivot
 	for(i=k+1; i<N; i++)
 	{
-		// Each column can be updated separately
-		// so this also plays nice with parallelization.
+		// Each row can be updated separately
+		// so this plays nice with parallelization.
    		if((i % mpi_size) == mpi_rank)
 		{
       			for(ii=k+1; ii<N; ii++)
       			{ 
-        	  		A[ii][i] = A[ii][i]-(A[ii][k]*A[k][i]);
+        	  		A[i][ii] = A[i][ii]-(A[i][k]*A[k][ii]);
 			}
         //printf("k=%d,i=%d",k,i);
         //printf("Thread number=%d\n",omp_get_thread_num());
@@ -197,10 +188,10 @@ void algorithm()
         //print('L', L);
         //print('U', U);
         	}
+
+		MPI_Bcast(&A[i][k+1], N-k-1, MPI_DOUBLE, i % mpi_size, MPI_COMM_WORLD);
     	}
 
-	// Block execution here until the sub matrix is updated.
-	MPI_Barrier(MPI_COMM_WORLD); 
   }
 
   //Make note of the end time
