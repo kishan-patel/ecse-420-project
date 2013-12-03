@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <sys/time.h>
 #include <math.h>
-#include <mpi.h>
+#include <omp.h>
 
 #define MIN(X,Y) ((X) < (Y) ? (X) : (Y))
 #define ERROR_TRESH 0.01
@@ -12,7 +12,7 @@ double **AOrig;
 double **L;
 double **U;
 double **P;
-int N, B;
+int N, B, T;
 int maxRowIndex;
 struct timeval start, end;
 
@@ -100,7 +100,7 @@ int findMaxRowIndex(int k, int max)
   return maxIndex;
 }
 
-void swapRows(double **matrix, int row1, int row2)
+int swapRows(double **matrix, int row1, int row2)
 {
   double *tmp = matrix[row1];
   matrix[row1] = matrix[row2];
@@ -139,117 +139,63 @@ int testPassed()
   return 1;
 }
 
-void algorithm()
-{
-  //Make note of the start time
-  gettimeofday(&start, 0);
-
-  //Perform LU decomposition
-  int mpi_rank, mpi_size;
-
-  // Initialize MPI after the timer has started.
-  // The threads split here after all and the initialization is
-  // part of the overhead.
-  MPI_Init(NULL, NULL);
-  MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
-  MPI_Comm_size(MPI_COMM_WORLD, &mpi_size);
-
-  //Perform LU decomposition
-  int i,j,k,ii;
-  int min;
-
-  // Getting all pivots that have entries below them (N - 1)
-  for(k=0; k<N-1; k++)
-  {
-	// Here, we are acting on a single column (of index k)
-       	for(i=k+1; i<N; i++)
-	{
-		// Update the entries below the pivot at A[k][k].
-        	A[i][k] = A[i][k]/A[k][k];
-	}
-
-	// Once again, we look under our pivots.
-	// Now we want to multiply what's under the pivots
-	// by the top row, and subtract this from each column under
-	// the pivot
-	for(i=k+1; i<N; i++)
-	{
-		// Each row can be updated separately
-		// so this plays nice with parallelization.
-   		if((i % mpi_size) == mpi_rank)
-		{
-      			for(ii=k+1; ii<N; ii++)
-      			{ 
-        	  		A[i][ii] = A[i][ii]-(A[i][k]*A[k][ii]);
-			}
-        //printf("k=%d,i=%d",k,i);
-        //printf("Thread number=%d\n",omp_get_thread_num());
-        //print('A', A);
-        //print('L', L);
-        //print('U', U);
-        	}
-
-		// Explanation of Broadcast:
-		// Here, we want to update all other processes with the values
-		// we just computed in the row that was assigned to us.
-		// The other processes have no idea of what these are unless
-		// we notify them, or broadcast, with the updated values.
-		// We then need to make sure we send or recv all rows from
-		// all processors before moving to the next pivot k.
-
-		// We use the address of the A[i] row to be:
-		// 1. sent if it was our job to update the row
-		// 2. recv if it wasn't
-		
-		// However, we are only interested in data boxed by the pivot
-		// Data from (i, k+1) to (N, N).
-		// This justifies the N-k-1 size.
-
-		// Because we designed row memory to be sequential, we send the
-		// address of the A matrix at the row we want to update,
-		// which is common in all processors, and send/recv just
-		// the right amount of data as our row counter, i, increases.
-		MPI_Bcast(&A[i][k+1], N-k-1, MPI_DOUBLE, i % mpi_size, MPI_COMM_WORLD);
-    	}
-
-  }
-
-  //Make note of the end time
-  //printf("Done decomposition\n");
-  MPI_Finalize();
-
-  gettimeofday(&end, 0);
-
-  if(mpi_rank == 0)
-    return;
-
-  else
-    exit(0);
-}
-
 int main(int argc, char *argv[])
 {
-  if(argc < 3)
+  if(argc < 4)
   {
-    printf("Usage: ./output_file matrix_size block_size\n");
+    printf("Usage: ./output_file matrix_size block_size thread_size\n");
     return 0;
   }
 
   //Set the matrix and block sizes.
   N = atoi(argv[1]);
   B = atoi(argv[2]);
+  T = atoi(argv[3]);
   
   //Initialize A, L, U matrices
   initialize();
+  
+  //Make note of the start time
+  gettimeofday(&start, 0);
 
-  // Run the LU algorithm
-  algorithm(); 
- 
-  // Getting the L and U matricies back is done by simply analyzing the 
-  // computed A matrix. This is done outside the decomposition since
-  // it has nothing to do with the actual algorithm.
-  // TEST
-  //print('A', A);
+  //Perform LU decomposition
+  int i,j,k,ii;
+  int min;
+
+  for(k=0; k<N; k++)
+  {
+    for(i=k; i<N; i++)
+    {
+        U[k][i] = A[k][i];
+    }
+
+    for(i=k+1; i<N; i++)
+    { 
+      L[i][k] = A[i][k]/A[k][k];
+    }
+    
+    #pragma omp parallel for private(ii, j, min) num_threads(T)   
+    for(i=k+1; i<N; i=i+B){
+      min = (i + B) < N ? i + B : N; 
+      #pragma omp parallel for private (j) num_threads(T)
+      for(ii=i; ii< min; ii++)
+      { 
+        for(j=k+1; j<N; j++)
+        {
+          A[ii][j] = A[ii][j]-(L[ii][k]*U[k][j]);
+        }
+        //printf("k=%d,i=%d",k,i);
+        //printf("Thread number=%d\n",omp_get_thread_num());
+        //print('A', A);
+        //print('L', L);
+        //print('U', U);
+      }
+    }
+  }
+
+  //Make note of the end time
+  //printf("Done decomposition\n");
+  gettimeofday(&end, 0);
 
   //Check if LU decomposition is valid. This is commented when trying to note 
   //time it takes program to run as the testing seems to take really long.

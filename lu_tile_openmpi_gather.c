@@ -28,17 +28,17 @@ void initialize()
 {
   int i, j, k, ii;
 
-  A = malloc(N * sizeof *A);   
+  A = malloc((N+1) * sizeof *A);   
   AOrig = malloc(N * sizeof *AOrig);
   L = malloc(N * sizeof *L);
   U = malloc(N * sizeof *U);
 
   for(i=0; i<N; i++)
   {
-    A[i] = malloc(N * sizeof *A[i]);
-    AOrig[i] = malloc(N * sizeof * AOrig[i]);
-    L[i] = malloc(N * sizeof *L[i]);
-    U[i] = malloc(N * sizeof *U[i]);
+    A[i] = malloc((N+1) * sizeof *A[i]);
+    AOrig[i] = malloc((N+1) * sizeof * AOrig[i]);
+    L[i] = malloc((N+1) * sizeof *L[i]);
+    U[i] = malloc((N+1) * sizeof *U[i]);
   }
 
   for(i=0; i<N; i++)
@@ -157,7 +157,10 @@ void algorithm()
   //Perform LU decomposition
   int i,j,k,ii;
   int min;
+  int rowsToSend;
+  int bcaster = 0;
 
+  
   // Getting all pivots that have entries below them (N - 1)
   for(k=0; k<N-1; k++)
   {
@@ -168,54 +171,35 @@ void algorithm()
         	A[i][k] = A[i][k]/A[k][k];
 	}
 
-	// Once again, we look under our pivots.
-	// Now we want to multiply what's under the pivots
-	// by the top row, and subtract this from each column under
-	// the pivot
-	for(i=k+1; i<N; i++)
-	{
-		// Each row can be updated separately
-		// so this plays nice with parallelization.
-   		if((i % mpi_size) == mpi_rank)
+    //We broadcast the updated matrix A to all processes. We do it here instead
+    //of at the bottom because only the root will have to broadcast it here instead
+    //of the individual processes.
+    MPI_Bcast(&A[0][0], N*N, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+	for(i=k+1; i<N; i=i+B)
+	{                             
+        min = (i+B) < N ? i + B : N;
+        rowsToSend = (i+B) < N ? B : N-i;
+        bcaster = ((int)(floor(i/B)) % mpi_size); 
+   		
+        if(((int)(floor(i/B)) % mpi_size) == mpi_rank)
 		{
-      			for(ii=k+1; ii<N; ii++)
-      			{ 
-        	  		A[i][ii] = A[i][ii]-(A[i][k]*A[k][ii]);
-			}
-        //printf("k=%d,i=%d",k,i);
-        //printf("Thread number=%d\n",omp_get_thread_num());
-        //print('A', A);
-        //print('L', L);
-        //print('U', U);
-        	}
+           for(ii=i; ii<min; ii++)
+           {
+             for(j=k+1; j<N; j++)
+             {
+               A[ii][j] = A[ii][j] - (A[ii][k]*A[k][j]);
+             }
+           }
+        }
 
-		// Explanation of Broadcast:
-		// Here, we want to update all other processes with the values
-		// we just computed in the row that was assigned to us.
-		// The other processes have no idea of what these are unless
-		// we notify them, or broadcast, with the updated values.
-		// We then need to make sure we send or recv all rows from
-		// all processors before moving to the next pivot k.
-
-		// We use the address of the A[i] row to be:
-		// 1. sent if it was our job to update the row
-		// 2. recv if it wasn't
-		
-		// However, we are only interested in data boxed by the pivot
-		// Data from (i, k+1) to (N, N).
-		// This justifies the N-k-1 size.
-
-		// Because we designed row memory to be sequential, we send the
-		// address of the A matrix at the row we want to update,
-		// which is common in all processors, and send/recv just
-		// the right amount of data as our row counter, i, increases.
-		MPI_Bcast(&A[i][k+1], N-k-1, MPI_DOUBLE, i % mpi_size, MPI_COMM_WORLD);
-    	}
+        //After each process is done updating the block they were assigned, the execute a gather 
+        //so the root process will receive all of the updates. 
+        MPI_Gather(&A[i][0], rowsToSend*(N), MPI_DOUBLE, &A[i][0], rowsToSend*(N), MPI_DOUBLE, 0, MPI_COMM_WORLD);
+     }
 
   }
 
-  //Make note of the end time
-  //printf("Done decomposition\n");
   MPI_Finalize();
 
   gettimeofday(&end, 0);
